@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 import json
+import copy
+import numpy
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
+from simplification.cutil import simplify_coords
 
-# Port to use for the stub
-from data import COORDS_STUTTGART
+# File of area data to use
+FEATURE_DATA_FILE = "stuttgart.json"
 
+# Threshold for starting the simplification
+SIMPLIFICATION_THRESHOLD = 13 # Suggestion: 7 for countries, 13 for stuttgart
+SIMPLIFICATION_FACTOR = 0.005 # Suggestion: 0.2 for countries, 0.01 for stuttgart
+
+# Port to use
 PORT_NUMBER = 8080
 
+# Paths to register the http handlers on
 PATH_AREA_TYPES = '/areaTypes'
 PATH_AREAS = '/area/'
 
@@ -23,35 +32,13 @@ RESPONSE_AREA_TYPES = """{
    ]
 }"""
 
-# Response template for area data requests
-RESPONSE_AREAS = {
-    "type": "FeatureCollection",
-    "crs": {
-        "type": "name",
-        "properties": {
-            "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
-        }
-    },
-    "features": [
-        {
-            "id": 12345,
-            "type": "Feature",
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": []
-            },
-            "properties": {
-                "name": "Stuttgart",
-                "color": "#FF0000",
-                "border-color": "#FFFF00",
-                "opacity": 0.5
-            }
-        }
-    ]
-}
+# Stores the parsed feature data
+feature_data = {}
+
 
 # Class that handles incoming HTTP requests
 class HTTPHandler(BaseHTTPRequestHandler):
+    global feature_data
 
     # Handler for GET requests
     def do_GET(self):
@@ -80,38 +67,33 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Get zoom from parameters
         zoom = queryParameters.get("zoom")[0]
-        zoom = round(float(zoom))
+        zoom = float(zoom)
 
-        # List of coordinates to use
-        coordinates = []
+        # Copy feature data
+        feature_collection = copy.deepcopy(feature_data)
 
-        # Take not all coordinates if zoom less than 13 -> simplification
-        if int(zoom) < 13:
+        # Iterate over all features
+        for index, feature in enumerate(feature_collection.get("features")):
+            # Check for threshold
+            if zoom >= SIMPLIFICATION_THRESHOLD:
+                break
 
-            n = 13 - zoom + 1
+            # Get coordinates of current feature
+            coordinates = feature.get("geometry").get("coordinates")[0]
 
-            # Iterate over all available coordinates
-            for index, coordinate in enumerate(COORDS_STUTTGART):
-                # Add only every n-th coordinate to coordinates list
-                if index % n == 0:
-                    coordinates.append(coordinate)
-        else:
-            # Take all available coordinates
-            coordinates = COORDS_STUTTGART.copy()
+            # Simplify coordinates
+            coordinates_simplified = simplify_coords(coordinates, (SIMPLIFICATION_THRESHOLD - zoom) * SIMPLIFICATION_FACTOR)
 
-        # Copy response template object
-        responseObject = RESPONSE_AREAS.copy()
+            # Replace coordinates in feature with simplified ones
+            feature.get("geometry").update({
+                "coordinates": [coordinates_simplified]
+            })
 
-        # Add coordinates to the response object
-        responseObject.get("features")[0].get("geometry").update({
-            "coordinates": [coordinates]
-        })
-
-        # Send success headers
+        # Done, come to an end
         self.success_headers()
 
-        # Write response object as JSON
-        self.wfile.write(bytes(json.dumps(responseObject), "UTF-8"))
+        # Write feature collection as JSON into response
+        self.wfile.write(bytes(json.dumps(feature_collection), "UTF-8"))
 
     # Sets success headers for response
     def success_headers(self):
@@ -127,9 +109,15 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(bytes("Invalid request.", "UTF-8"))
 
-
+# Main function
 def main():
+    global feature_data
+
     try:
+        # Read in feature data file
+        with open(FEATURE_DATA_FILE) as file:
+            feature_data = json.load(file)
+
         # Create basic web server
         server = HTTPServer(('', PORT_NUMBER), HTTPHandler)
         print('Started server stub on port', PORT_NUMBER)
