@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 import json
 import copy
-import numpy
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 from simplification.cutil import simplify_coords
-
+    
 # File of area data to use
-FEATURE_DATA_FILE = "stuttgart.json"
+FEATURE_DATA_FILE = "countries.json"
 
 # Threshold for starting the simplification
-SIMPLIFICATION_THRESHOLD = 13 # Suggestion: 7 for countries, 13 for stuttgart
-SIMPLIFICATION_FACTOR = 0.005 # Suggestion: 0.2 for countries, 0.01 for stuttgart
+SIMPLIFICATION_THRESHOLD = 7 # Suggestion: 7 for countries, 13 for stuttgart
+SIMPLIFICATION_FACTOR = 0.2 # Suggestion: 0.2 for countries, 0.01 for stuttgart
 
 # Port to use
 PORT_NUMBER = 8080
