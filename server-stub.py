@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 import json
-import copy
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
-from simplification.cutil import simplify_coords
-    
-# File of area data to use
-FEATURE_DATA_FILE = "countries.json"
-
-# Threshold for starting the simplification
-SIMPLIFICATION_THRESHOLD = 7 # Suggestion: 7 for countries, 13 for stuttgart
-SIMPLIFICATION_FACTOR = 0.2 # Suggestion: 0.2 for countries, 0.01 for stuttgart
+from database import DatabaseConnection
 
 # Port to use
 PORT_NUMBER = 8080
+
+# Database settings
+DATABASE_HOST = "localhost"
+DATABASE_NAME = "gis"
+DATABASE_USER = "postgres"
+DATABASE_PASSWORD = None
+
+# Database table that holds the simplified data
+DATABASE_TABLE = "simplified"
 
 # Paths to register the http handlers on
 PATH_AREA_TYPES = '/areaTypes'
@@ -31,14 +34,16 @@ RESPONSE_AREA_TYPES = """{
    ]
 }"""
 
-# Stores the parsed feature data
-feature_data = {}
+# Reference to the database connection to use
+database = None
+
+# Stats
+database_requests = [0] * 20
+database_time_sum = [0] * 20
 
 
 # Class that handles incoming HTTP requests
 class HTTPHandler(BaseHTTPRequestHandler):
-    global feature_data
-
     # Handler for GET requests
     def do_GET(self):
         # Handle request depending on the request path
@@ -57,6 +62,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
     # Handles requests for areas
     def handle_areas(self):
+        global database, database_requests, database_time_sum
+
         # Get query parameters of the request
         queryParameters = parse_qs(urlparse(self.path).query)
 
@@ -64,35 +71,59 @@ class HTTPHandler(BaseHTTPRequestHandler):
         if not "zoom" in queryParameters:
             self.sendError()
 
-        # Get zoom from parameters
-        zoom = queryParameters.get("zoom")[0]
-        zoom = float(zoom)
+        # Read request parameters
+        x_min = float(queryParameters.get("x_min")[0])
+        y_min = float(queryParameters.get("y_min")[0])
+        x_max = float(queryParameters.get("x_max")[0])
+        y_max = float(queryParameters.get("y_max")[0])
+        zoom = float(queryParameters.get("zoom")[0])
+        zoom = round(zoom)
 
-        # Copy feature data
-        feature_collection = copy.deepcopy(feature_data)
+        # Start to measure required time
+        time_database_start = time.time()
 
-        # Iterate over all features
-        for index, feature in enumerate(feature_collection.get("features")):
-            # Check for threshold
-            if zoom >= SIMPLIFICATION_THRESHOLD:
-                break
+        # Build bounding box query
+        query = f"""SELECT json_build_object(
+                        'type', 'FeatureCollection',
+                        'crs',  json_build_object(
+                            'type',      'name', 
+                            'properties', json_build_object(
+                                'name', 'EPSG:4326'  
+                            )
+                        ), 
+                        'features', json_agg(
+                            json_build_object(
+                                'type',       'Feature',
+                                'id',         id,
+                                'geometry',   ST_AsGeoJSON(geom)::json,
+                                'properties', json_build_object(
+                                    'type', type,
+                                    'zoom', zoom
+                                )
+                            )
+                        )
+                    )::text
+                    FROM (
+                        SELECT * FROM {DATABASE_TABLE}
+                        WHERE (zoom = {zoom}) AND
+                        (geom && ST_MakeEnvelope({x_min}, {y_min}, {x_max}, {y_max}))
+                    ) AS filter;"""
 
-            # Get coordinates of current feature
-            coordinates = feature.get("geometry").get("coordinates")[0]
+        # Send query to database
+        result = database.queryForResult(query)
 
-            # Simplify coordinates
-            coordinates_simplified = simplify_coords(coordinates, (SIMPLIFICATION_THRESHOLD - zoom) * SIMPLIFICATION_FACTOR)
+        # Update stats
+        database_requests[zoom] += 1
+        database_time_sum[zoom] += (time.time() - time_database_start)
 
-            # Replace coordinates in feature with simplified ones
-            feature.get("geometry").update({
-                "coordinates": [coordinates_simplified]
-            })
+        # Get GeoJSON from result
+        geoJSON = result[0][0]
 
         # Done, come to an end
         self.success_headers()
 
         # Write feature collection as JSON into response
-        self.wfile.write(bytes(json.dumps(feature_collection), "UTF-8"))
+        self.wfile.write(bytes(geoJSON, "UTF-8"))
 
     # Sets success headers for response
     def success_headers(self):
@@ -108,15 +139,36 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(bytes("Invalid request.", "UTF-8"))
 
+
+# Periodically outputs the current stats at the console
+def outputStats():
+    global database_requests, database_time_sum
+    print("Average query times:")
+    print("---------------")
+    for zoom in range(len(database_requests)):
+        requests = database_requests[zoom]
+        if requests < 1:
+            continue
+        print(f"Zoom {zoom}: {database_time_sum[zoom] / requests} seconds")
+
+    # Output stats again in 60 seconds
+    threading.Timer(60, outputStats).start()
+
+
 # Main function
 def main():
-    global feature_data
+    global database
 
+    # Connect to database
+    database = DatabaseConnection(host=DATABASE_HOST, database=DATABASE_NAME, user=DATABASE_USER,
+                                  password=DATABASE_PASSWORD)
+
+    # Output stats after 60 seconds for the first time
+    threading.Timer(60, outputStats).start()
+
+    # Initialize server
+    server = None
     try:
-        # Read in feature data file
-        with open(FEATURE_DATA_FILE) as file:
-            feature_data = json.load(file)
-
         # Create basic web server
         server = HTTPServer(('', PORT_NUMBER), HTTPHandler)
         print('Started server stub on port', PORT_NUMBER)
@@ -126,7 +178,7 @@ def main():
 
     except KeyboardInterrupt:
         print('Shutting down server stub.')
-        server.socket.close()
+        if server is not None: server.socket.close()
 
 
 if __name__ == '__main__':
