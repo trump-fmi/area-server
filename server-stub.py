@@ -83,31 +83,35 @@ class HTTPHandler(BaseHTTPRequestHandler):
         time_database_start = time.time()
 
         # Build bounding box query
-        query = f"""SELECT json_build_object(
-                        'type', 'FeatureCollection',
-                        'crs',  json_build_object(
-                            'type',      'name', 
-                            'properties', json_build_object(
-                                'name', 'EPSG:4326'  
-                            )
-                        ), 
-                        'features', json_agg(
-                            json_build_object(
-                                'type',       'Feature',
-                                'id',         id,
-                                'geometry',   ST_AsGeoJSON(geom)::json,
-                                'properties', json_build_object(
-                                    'type', type,
-                                    'zoom', zoom
-                                )
-                            )
-                        )
-                    )::text
+
+        query = f"""SELECT CONCAT(
+                    '{{
+                        "type": "FeatureCollection",
+                        "crs": {{
+                            "type": "name",
+                            "properties": {{
+                                "name": "EPSG:4326"
+                            }}
+                        }},
+                        "features": [', string_agg(CONCAT(
+                            '{{
+                                "type": "Feature",
+                                "id": ', id, ',
+                                "geometry": ', geojson, ',
+                                "properties": {{
+                                    "zoom": ', zoom,
+                                '}}
+                            }}'), ','), '
+                        ]
+                    }}')
                     FROM (
                         SELECT * FROM {DATABASE_TABLE}
                         WHERE (zoom = {zoom}) AND
                         (geom && ST_MakeEnvelope({x_min}, {y_min}, {x_max}, {y_max}))
                     ) AS filter;"""
+
+        # Replace line breaks in query
+        query = query.replace("\n", "")
 
         # Send query to database
         result = database.queryForResult(query)
