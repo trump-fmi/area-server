@@ -7,7 +7,7 @@ from urllib.parse import urlparse, parse_qs
 from database import DatabaseConnection
 
 # Port to use
-PORT_NUMBER = 8080
+PORT_NUMBER = 8181
 
 # Database settings
 DATABASE_HOST = "localhost"
