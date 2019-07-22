@@ -139,8 +139,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         (geom && ST_MakeEnvelope({x_min}, {y_min}, {x_max}, {y_max}))
                     ) AS filter;"""
 
-        # Replace line breaks in query
+        # Replace line breaks and multiple spaces from query
         query = query.replace("\n", "")
+        query = re.sub(" {2,}", " ", query)
 
         # Send query to database
         result = database.queryForResult(query)
