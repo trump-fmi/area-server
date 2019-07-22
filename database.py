@@ -1,7 +1,6 @@
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-
 class DatabaseConnection:
     def __init__(self, host, database, user, password=None):
         self.host = host
