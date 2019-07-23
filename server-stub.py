@@ -103,10 +103,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
         zoom = round(zoom)
 
         # Check if zoom is within range
-        if (zoom < area_type[JSON_KEY_TYPE_ZOOM_MIN]) or (zoom > area_type[JSON_KEY_TYPE_ZOOM_MAX]):
+        if (zoom < area_type[JSON_KEY_TYPE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_TYPE_ZOOM_MAX]):
             # Send empty response
-            self.success_headers()
-            self.wfile.write(bytes("{}", "UTF-8"))
+            self.empty_headers()
             return
 
         # Get database table name from area type
@@ -160,6 +159,12 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Content-type', 'application/json')
+        self.end_headers()
+
+    # Sets headers for empty response
+    def empty_headers(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
 
     # Indicates that an error occurred

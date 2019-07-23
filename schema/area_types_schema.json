@@ -102,7 +102,7 @@
             "$id": "#/properties/types/items/properties/zoom_max",
             "type": "integer",
             "title": "Maximum zoom level",
-            "description": "Maximum zoom value (inclusive) for which areas of this type are supposed to be displayed",
+            "description": "Maximum zoom value (exclusive) for which areas of this type are supposed to be displayed",
             "minimum": 0.0,
             "maximum": 19.0,
             "default": 19.0
