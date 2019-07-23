@@ -10,8 +10,8 @@ from jsonschema import validate
 PORT_NUMBER = 8181
 
 # File paths for area types JSON schema and document files
-AREA_TYPES_DOCUMENT_FILE = "schema/area_types.json"
-AREA_TYPES_SCHEMA_FILE = "schema/area_types_schema.json"
+AREA_TYPES_DOCUMENT_FILE = "../area-types/area_types.json"
+AREA_TYPES_SCHEMA_FILE = "../area-types/area_types_schema.json"
 
 # Database settings
 DATABASE_HOST = "localhost"
