@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import json
 import re
+import gzip
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import StringIO
 from urllib.parse import urlparse, parse_qs
 from database import DatabaseConnection
 from jsonschema import validate
@@ -61,8 +63,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
     # Handles requests for area types
     def handle_area_types(self):
         json_string = json.dumps(area_types_definition)
-        self.success_headers()
-        self.wfile.write(bytes(json_string, "UTF-8"))
+
+        # Send success response
+        self.success_reply(json_string)
 
     # Handles requests for areas
     def handle_areas(self):
@@ -148,18 +151,20 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Get GeoJSON from result
         geo_json = result[0][0]
 
-        # Send success headers
-        self.success_headers()
+        # Send success response
+        self.success_reply(geo_json)
 
-        # Write feature collection as JSON into response
-        self.wfile.write(bytes(geo_json, "UTF-8"))
-
-    # Sets success headers for response
-    def success_headers(self):
+    def success_reply(self, content_string):
+        content_bytes = bytes(content_string, 'UTF-8')
+        content_gzip = gzip.compress(content_bytes)
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Content-type', 'application/json')
+        self.send_header("Content-length", str(len(content_gzip)))
+        self.send_header("Content-Encoding", "gzip")
         self.end_headers()
+        self.wfile.write(content_gzip)
+        self.wfile.flush()
 
     # Sets headers for empty response
     def empty_headers(self):
