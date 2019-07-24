@@ -130,7 +130,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
                                 "id": ', id, ',
                                 "geometry": ', geojson, ',
                                 "properties": {{
-                                    "name": ', name, ',
+                                    "name": "', name, '",
                                     "zoom": ', zoom,
                                 '}}
                             }}'), ','), '
