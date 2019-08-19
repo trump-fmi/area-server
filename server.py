@@ -3,11 +3,7 @@ import json
 import re
 import gzip
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from io import StringIO
 from urllib.parse import urlparse, parse_qs
-
-import psycopg2
-
 from database import DatabaseConnection
 from jsonschema import validate
 
@@ -19,7 +15,7 @@ AREA_TYPES_DOCUMENT_FILE = "../area-types/area_types.json"
 AREA_TYPES_SCHEMA_FILE = "../area-types/area_types_schema.json"
 
 # Database settings
-DATABASE_HOST = "trump-postgis"
+DATABASE_HOST = "localhost"
 DATABASE_NAME = "gis"
 DATABASE_USER = "osm"
 DATABASE_PASSWORD = None
