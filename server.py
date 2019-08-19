@@ -5,18 +5,21 @@ import gzip
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from io import StringIO
 from urllib.parse import urlparse, parse_qs
+
+import psycopg2
+
 from database import DatabaseConnection
 from jsonschema import validate
 
 # Port to use
-PORT_NUMBER = 8181
+PORT_NUMBER = 80
 
 # File paths for area types JSON schema and document files
 AREA_TYPES_DOCUMENT_FILE = "../area-types/area_types.json"
 AREA_TYPES_SCHEMA_FILE = "../area-types/area_types_schema.json"
 
 # Database settings
-DATABASE_HOST = ""
+DATABASE_HOST = "localhost"
 DATABASE_NAME = "gis"
 DATABASE_USER = "postgres"
 DATABASE_PASSWORD = None
@@ -57,7 +60,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         elif self.path.startswith(RESOURCE_PATH_GET):
             self.handle_areas()
         else:
-            self.error_headers()
+            self.invalid_request_headers()
         return
 
     # Handles requests for area types
@@ -75,7 +78,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         search_result = re.search(RESOURCE_PATH_GET + "([A-z0-9_]*)[/?].*", self.path)
 
         if search_result is None:
-            self.error_headers()
+            self.invalid_request_headers()
             return
 
         resource_name = search_result.group(1)
@@ -85,7 +88,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Check if area could be found
         if area_type is None:
-            self.error_headers()
+            self.invalid_request_headers()
             return
 
         # Get query parameters of the request
@@ -94,7 +97,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Raise error if not all required parameters are contained in the request
         if not all(param in query_parameters for param in ["x_min", "y_min", "x_max", "y_max", "zoom"]):
-            self.error_headers()
+            self.invalid_request_headers()
             return
 
         # Read request parameters
@@ -146,8 +149,27 @@ class HTTPHandler(BaseHTTPRequestHandler):
         query = query.replace("\n", "")
         query = re.sub(" {2,}", " ", query)
 
-        # Send query to database
-        result = database.queryForResult(query)
+        # Try to issue the query at the database
+        result = None
+        try:
+            result = database.queryForResult(query)
+        except:
+            # Database connection was lost
+            print("Database connection lost, trying to reconnect...")
+
+            # Try to reconnect
+            try:
+                db_connect()
+                result = database.queryForResult(query)
+                print(f"Reconnected successfully")
+            except:
+                print(f"Reconnect attempt failed")
+
+        # Sanity check for result
+        if result is None:
+            print("Failed to retrieve data from database")
+            self.internal_error_headers()
+            return
 
         # Get GeoJSON from result
         geo_json = result[0][0]
@@ -173,12 +195,19 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
 
-    # Indicates that an error occurred
-    def error_headers(self):
+    # Indicates that the request was malformed
+    def invalid_request_headers(self):
         self.send_response(400)
         self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write(bytes("Invalid request.", "UTF-8"))
+
+    # Indicates that an internal error occurred
+    def internal_error_headers(self):
+        self.send_response(500)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(bytes("An internal error occurred.", "UTF-8"))
 
 
 # Reads the area type definition from the JSON document and validates it against the schema
@@ -211,6 +240,12 @@ def parse_area_types():
         area_types_mapping[resource] = area_type
 
 
+def db_connect():
+    global database
+    database = DatabaseConnection(host=DATABASE_HOST, database=DATABASE_NAME, user=DATABASE_USER,
+                                  password=DATABASE_PASSWORD)
+
+
 # Main function
 def main():
     global database
@@ -223,8 +258,8 @@ def main():
 
     # Connect to database
     print(f"Connecting to database \"{DATABASE_NAME}\" at \"{DATABASE_HOST}\" as user \"{DATABASE_USER}\"...")
-    database = DatabaseConnection(host=DATABASE_HOST, database=DATABASE_NAME, user=DATABASE_USER,
-                                  password=DATABASE_PASSWORD)
+    db_connect()
+
     print("Successfully connected")
     print(f"Starting server on port {PORT_NUMBER}...")
 
