@@ -1,0 +1,9 @@
+---
+language: python
+
+script:
+  - true
+
+after_script:
+  # Trigger build of trump-area image
+  - "curl -H \"Content-Type: application/json\" --data '{\"docker_tag\": \"latest\"}' -X POST https://cloud.docker.com/api/build/v1/source/7b2d9bf0-2c9e-4d6a-a8fb-534165b11b95/trigger/31331f79-e1d0-4065-b644-0cbcc4a7b84f/call/"

@@ -1,4 +1,4 @@
-# area-server
+# area-server [![Build Status](https://travis-ci.org/trump-fmi/area-server.svg?branch=master)](https://travis-ci.org/trump-fmi/area-server)
 
 This python project connects to a postgres database containing border information and serves them at port `8181`.
 
