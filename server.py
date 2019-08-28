@@ -8,7 +8,7 @@ from database import DatabaseConnection
 from jsonschema import validate
 
 # Port to use
-PORT_NUMBER = 80
+PORT_NUMBER = 8181
 
 # File paths for area types JSON schema and document files
 AREA_TYPES_DOCUMENT_FILE = "../area-types/area_types.json"
