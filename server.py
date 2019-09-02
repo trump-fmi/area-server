@@ -26,21 +26,19 @@ RESOURCE_PATH_GET = '/get/'
 
 # JSON key names of the area types definition
 JSON_KEY_TYPES_LIST = "types"
-JSON_KEY_TYPE_NAME = "name"
-JSON_KEY_TYPE_RESOURCE = "resource"
-JSON_KEY_TYPE_TABLE_NAME = "table_name"
-JSON_KEY_TYPE_GEOMETRY_LIST = "geometries"
-JSON_KEY_TYPE_CONDITIONS = "filter_condition"
-JSON_KEY_TYPE_LABELS = "labels"
-JSON_KEY_TYPE_SIMPLIFICATION = "simplification"
-JSON_KEY_TYPE_ZOOM_MIN = "zoom_min"
-JSON_KEY_TYPE_ZOOM_MAX = "zoom_max"
+JSON_KEY_TYPE_SOURCES = "sources"
+JSON_KEY_TYPE_SOURCE_RESOURCE = "resource"
+JSON_KEY_TYPE_SOURCE_TABLE_NAME = "table_name"
+JSON_KEY_TYPE_SOURCE_FILTERS = "filter_parameters"
+JSON_KEY_TYPE_SOURCE_SIMPLIFICATION = "simplification"
+JSON_KEY_TYPE_SOURCE_ZOOM_MIN = "zoom_min"
+JSON_KEY_TYPE_SOURCE_ZOOM_MAX = "zoom_max"
 
 # Holds the area types definition (from JSON)
-area_types_definition = {}
+area_types = {}
 
-# Maps resource names of area types to the area types object
-area_types_mapping = {}
+# Maps resource names to the corresponding area type sources
+sources_mapping = {}
 
 # Reference to the database connection to use
 database = None
@@ -61,7 +59,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
     # Handles requests for area types
     def handle_area_types(self):
-        json_string = json.dumps(area_types_definition)
+        json_string = json.dumps(area_types)
 
         # Send success response
         self.success_reply(json_string)
@@ -80,7 +78,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         resource_name = search_result.group(1)
 
         # Get area type for this resource name
-        area_type = area_types_mapping.get(resource_name)
+        area_type = sources_mapping.get(resource_name)
 
         # Check if area could be found
         if area_type is None:
@@ -105,13 +103,13 @@ class HTTPHandler(BaseHTTPRequestHandler):
         zoom = round(zoom)
 
         # Check if zoom is within range
-        if (zoom < area_type[JSON_KEY_TYPE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_TYPE_ZOOM_MAX]):
+        if (zoom < area_type[JSON_KEY_TYPE_SOURCE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_TYPE_SOURCE_ZOOM_MAX]):
             # Send empty response
             self.empty_headers()
             return
 
         # Get database table name from area type
-        db_table_name = area_type[JSON_KEY_TYPE_TABLE_NAME]
+        db_table_name = area_type[JSON_KEY_TYPE_SOURCE_TABLE_NAME]
 
         # Build bounding box query
         query = f"""SELECT CONCAT(
@@ -208,7 +206,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
 # Reads the area type definition from the JSON document and validates it against the schema
 def read_area_types():
-    global area_types_definition
+    global area_types
 
     # Read in area types document file
     print(f"Reading area types document file \"{AREA_TYPES_DOCUMENT_FILE}\"...")
@@ -225,15 +223,21 @@ def read_area_types():
         validate(instance=area_types, schema=area_schema)
 
     # Set global area type dict if everything went fine
-    area_types_definition = area_types[JSON_KEY_TYPES_LIST]
+    area_types = area_types[JSON_KEY_TYPES_LIST]
 
 
 def parse_area_types():
-    global area_types_definition, area_types_mapping
+    global area_types, sources_mapping
 
-    for area_type in area_types_definition:
-        resource = area_type[JSON_KEY_TYPE_RESOURCE]
-        area_types_mapping[resource] = area_type
+    # Iterate over all defined area types
+    for area_type in area_types:
+        # Iterate over all sources of this area type
+        for source in area_type[JSON_KEY_TYPE_SOURCES]:
+            # Get resource name
+            resource = source[JSON_KEY_TYPE_SOURCE_RESOURCE]
+
+            # Add source to sources mapping
+            sources_mapping[resource] = source
 
 
 def db_connect():
