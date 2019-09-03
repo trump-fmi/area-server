@@ -26,32 +26,32 @@ RESOURCE_AREA_TYPES = '/types'
 RESOURCE_PATH_GET = '/get/'
 
 # JSON key names of the area types definition
-JSON_KEY_TYPES_LIST = "types"
-JSON_KEY_TYPE_NAME = "name"
-JSON_KEY_TYPE_SOURCES = "sources"
-JSON_KEY_TYPE_SOURCE_LABELS = "labels"
-JSON_KEY_TYPE_SOURCE_RESOURCE = "resource"
-JSON_KEY_TYPE_SOURCE_TABLE_NAME = "table_name"
-JSON_KEY_TYPE_SOURCE_FILTERS = "filter_parameters"
-JSON_KEY_TYPE_SOURCE_SEARCH_HIGHLIGHT = "search_highlight"
-JSON_KEY_TYPE_SOURCE_SIMPLIFICATION = "simplification"
-JSON_KEY_TYPE_SOURCE_Z_INDEX = "z_index"
-JSON_KEY_TYPE_SOURCE_ZOOM_MIN = "zoom_min"
-JSON_KEY_TYPE_SOURCE_ZOOM_MAX = "zoom_max"
+JSON_KEY_GROUPS_LIST = "groups"
+JSON_KEY_GROUP_NAME = "name"
+JSON_KEY_GROUP_TYPES = "types"
+JSON_KEY_GROUP_TYPE_LABELS = "labels"
+JSON_KEY_GROUP_TYPE_RESOURCE = "resource"
+JSON_KEY_GROUP_TYPE_TABLE_NAME = "table_name"
+JSON_KEY_GROUP_TYPE_FILTERS = "filter_parameters"
+JSON_KEY_GROUP_TYPE_SEARCH_HIGHLIGHT = "search_highlight"
+JSON_KEY_GROUP_TYPE_SIMPLIFICATION = "simplification"
+JSON_KEY_GROUP_TYPE_Z_INDEX = "z_index"
+JSON_KEY_GROUP_TYPE_ZOOM_MIN = "zoom_min"
+JSON_KEY_GROUP_TYPE_ZOOM_MAX = "zoom_max"
 
-# List of client-related JSON keys for source fields
-CLIENT_SOURCE_KEYS = [JSON_KEY_TYPE_SOURCE_LABELS, JSON_KEY_TYPE_SOURCE_RESOURCE, JSON_KEY_TYPE_SOURCE_SEARCH_HIGHLIGHT,
-                      JSON_KEY_TYPE_SOURCE_SIMPLIFICATION, JSON_KEY_TYPE_SOURCE_Z_INDEX, JSON_KEY_TYPE_SOURCE_ZOOM_MIN,
-                      JSON_KEY_TYPE_SOURCE_ZOOM_MAX]
+# List of client-related JSON keys for area type properties
+CLIENT_AREA_TYPE_KEYS = [JSON_KEY_GROUP_TYPE_LABELS, JSON_KEY_GROUP_TYPE_RESOURCE, JSON_KEY_GROUP_TYPE_SEARCH_HIGHLIGHT,
+                         JSON_KEY_GROUP_TYPE_SIMPLIFICATION, JSON_KEY_GROUP_TYPE_Z_INDEX, JSON_KEY_GROUP_TYPE_ZOOM_MIN,
+                         JSON_KEY_GROUP_TYPE_ZOOM_MAX]
 
-# Holds the area types definition (from JSON)
-area_types = {}
+# Holds the area type groups definition (from JSON)
+area_type_groups = {}
 
-# Maps resource names to the corresponding area type sources
-sources_mapping = {}
+# Maps resource names to the corresponding area types
+area_types_mapping = {}
 
 # Will hold the JSON string containing client-related data about the area types
-area_types_client_string = ""
+area_types_client_json = ""
 
 # Reference to the database connection to use
 database = None
@@ -73,7 +73,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
     # Handles requests for area types
     def handle_area_types(self):
         # Send success response
-        self.success_reply(area_types_client_string)
+        self.success_reply(area_types_client_json)
 
     # Handles requests for areas
     def handle_areas(self):
@@ -89,7 +89,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         resource_name = search_result.group(1)
 
         # Get area type for this resource name
-        area_type = sources_mapping.get(resource_name)
+        area_type = area_types_mapping.get(resource_name)
 
         # Check if area could be found
         if area_type is None:
@@ -114,13 +114,13 @@ class HTTPHandler(BaseHTTPRequestHandler):
         zoom = round(zoom)
 
         # Check if zoom is within range
-        if (zoom < area_type[JSON_KEY_TYPE_SOURCE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_TYPE_SOURCE_ZOOM_MAX]):
+        if (zoom < area_type[JSON_KEY_GROUP_TYPE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_GROUP_TYPE_ZOOM_MAX]):
             # Send empty response
             self.empty_headers()
             return
 
         # Get database table name from area type
-        db_table_name = area_type[JSON_KEY_TYPE_SOURCE_TABLE_NAME]
+        db_table_name = area_type[JSON_KEY_GROUP_TYPE_TABLE_NAME]
 
         # Build bounding box query
         query = f"""SELECT CONCAT(
@@ -217,12 +217,12 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
 # Reads the area type definition from the JSON document and validates it against the schema
 def read_area_types():
-    global area_types
+    global area_type_groups
 
     # Read in area types document file
     print(f"Reading area types document file \"{AREA_TYPES_DOCUMENT_FILE}\"...")
     with open(AREA_TYPES_DOCUMENT_FILE) as document_file:
-        area_types = json.load(document_file)
+        area_type_groups = json.load(document_file)
 
     # Read in area types schema file
     print(f"Reading area types schema file \"{AREA_TYPES_SCHEMA_FILE}\"...")
@@ -231,50 +231,50 @@ def read_area_types():
 
         # Validate document against the schema
         print("Validating area types definition...")
-        validate(instance=area_types, schema=area_schema)
+        validate(instance=area_type_groups, schema=area_schema)
 
     # Set global area type dict if everything went fine
-    area_types = area_types[JSON_KEY_TYPES_LIST]
+    area_type_groups = area_type_groups[JSON_KEY_GROUPS_LIST]
 
 
 def parse_area_types():
-    global area_types, sources_mapping, area_types_client_string
+    global area_type_groups, area_types_mapping, area_types_client_json
 
     # List holding the filtered client-related data
     client_data = []
 
-    # Iterate over all defined area types
-    for area_type in area_types:
+    # Iterate over all defined area type groups
+    for area_type_group in area_type_groups:
 
-        # Create new object for this area type that only contains client-related data
-        filtered_area_type = {}
-        filtered_area_type[JSON_KEY_TYPE_NAME] = area_type[JSON_KEY_TYPE_NAME]
-        filtered_area_type[JSON_KEY_TYPE_SOURCES] = []
+        # Create new object for this area type group that only contains client-related data
+        filtered_group = {}
+        filtered_group[JSON_KEY_GROUP_NAME] = area_type_group[JSON_KEY_GROUP_NAME]
+        filtered_group[JSON_KEY_GROUP_TYPES] = []
 
-        client_data.append(filtered_area_type)
+        client_data.append(filtered_group)
 
-        # Iterate over all sources of this area type
-        for source in area_type[JSON_KEY_TYPE_SOURCES]:
+        # Iterate over all area types of this group
+        for area_type in area_type_group[JSON_KEY_GROUP_TYPES]:
             # Get resource name
-            resource = source[JSON_KEY_TYPE_SOURCE_RESOURCE]
+            resource = area_type[JSON_KEY_GROUP_TYPE_RESOURCE]
 
-            # Add source to sources mapping
-            sources_mapping[resource] = source
+            # Add area type to mappings
+            area_types_mapping[resource] = area_type
 
-            # Create new dict for this area type source that only contains client-related data
-            filtered_source = {}
-            filtered_area_type[JSON_KEY_TYPE_SOURCES].append(filtered_source)
+            # Create new dict for this area type that only contains client-related data
+            filtered_type = {}
+            filtered_group[JSON_KEY_GROUP_TYPES].append(filtered_type)
 
-            # Iterate over all keys of this source
-            for source_key in source:
+            # Iterate over all keys of this area type
+            for type_key in area_type:
                 # Skip key if not flagged as client-related
-                if source_key not in CLIENT_SOURCE_KEYS: continue
+                if type_key not in CLIENT_AREA_TYPE_KEYS: continue
 
-                # Key is client-related, add it to filtered source dict
-                filtered_source[source_key] = source[source_key]
+                # Key is client-related, add it to filtered area type dict
+                filtered_type[type_key] = area_type[type_key]
 
     # Dump client-related data to JSON string
-    area_types_client_string = json.dumps(client_data, separators=(',', ':'))
+    area_types_client_json = json.dumps(client_data, separators=(',', ':'))
 
 
 def db_connect():
