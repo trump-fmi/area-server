@@ -2,6 +2,7 @@
 import json
 import re
 import gzip
+import copy
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 from database import DatabaseConnection
@@ -26,19 +27,31 @@ RESOURCE_PATH_GET = '/get/'
 
 # JSON key names of the area types definition
 JSON_KEY_TYPES_LIST = "types"
+JSON_KEY_TYPE_NAME = "name"
 JSON_KEY_TYPE_SOURCES = "sources"
+JSON_KEY_TYPE_SOURCE_LABELS = "labels"
 JSON_KEY_TYPE_SOURCE_RESOURCE = "resource"
 JSON_KEY_TYPE_SOURCE_TABLE_NAME = "table_name"
 JSON_KEY_TYPE_SOURCE_FILTERS = "filter_parameters"
+JSON_KEY_TYPE_SOURCE_SEARCH_HIGHLIGHT = "search_highlight"
 JSON_KEY_TYPE_SOURCE_SIMPLIFICATION = "simplification"
+JSON_KEY_TYPE_SOURCE_Z_INDEX = "z_index"
 JSON_KEY_TYPE_SOURCE_ZOOM_MIN = "zoom_min"
 JSON_KEY_TYPE_SOURCE_ZOOM_MAX = "zoom_max"
+
+# List of client-related JSON keys for source fields
+CLIENT_SOURCE_KEYS = [JSON_KEY_TYPE_SOURCE_LABELS, JSON_KEY_TYPE_SOURCE_RESOURCE, JSON_KEY_TYPE_SOURCE_SEARCH_HIGHLIGHT,
+                      JSON_KEY_TYPE_SOURCE_SIMPLIFICATION, JSON_KEY_TYPE_SOURCE_Z_INDEX, JSON_KEY_TYPE_SOURCE_ZOOM_MIN,
+                      JSON_KEY_TYPE_SOURCE_ZOOM_MAX]
 
 # Holds the area types definition (from JSON)
 area_types = {}
 
 # Maps resource names to the corresponding area type sources
 sources_mapping = {}
+
+# Will hold the JSON string containing client-related data about the area types
+area_types_client_string = ""
 
 # Reference to the database connection to use
 database = None
@@ -59,10 +72,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
     # Handles requests for area types
     def handle_area_types(self):
-        json_string = json.dumps(area_types)
-
         # Send success response
-        self.success_reply(json_string)
+        self.success_reply(area_types_client_string)
 
     # Handles requests for areas
     def handle_areas(self):
@@ -227,10 +238,21 @@ def read_area_types():
 
 
 def parse_area_types():
-    global area_types, sources_mapping
+    global area_types, sources_mapping, area_types_client_string
+
+    # List holding the filtered client-related data
+    client_data = []
 
     # Iterate over all defined area types
     for area_type in area_types:
+
+        # Create new object for this area type that only contains client-related data
+        filtered_area_type = {}
+        filtered_area_type[JSON_KEY_TYPE_NAME] = area_type[JSON_KEY_TYPE_NAME]
+        filtered_area_type[JSON_KEY_TYPE_SOURCES] = []
+
+        client_data.append(filtered_area_type)
+
         # Iterate over all sources of this area type
         for source in area_type[JSON_KEY_TYPE_SOURCES]:
             # Get resource name
@@ -238,6 +260,21 @@ def parse_area_types():
 
             # Add source to sources mapping
             sources_mapping[resource] = source
+
+            # Create new dict for this area type source that only contains client-related data
+            filtered_source = {}
+            filtered_area_type[JSON_KEY_TYPE_SOURCES].append(filtered_source)
+
+            # Iterate over all keys of this source
+            for source_key in source:
+                # Skip key if not flagged as client-related
+                if source_key not in CLIENT_SOURCE_KEYS: continue
+
+                # Key is client-related, add it to filtered source dict
+                filtered_source[source_key] = source[source_key]
+
+    # Dump client-related data to JSON string
+    area_types_client_string = json.dumps(client_data, separators=(',', ':'))
 
 
 def db_connect():
@@ -250,7 +287,7 @@ def db_connect():
 def main():
     global database
 
-    # Read area types definition from file and extract relevant information
+    # Read area types definition from file and extract relevant data
     read_area_types()
     parse_area_types()
 
