@@ -39,7 +39,7 @@ JSON_KEY_GROUP_TYPE_Z_INDEX = "z_index"
 JSON_KEY_GROUP_TYPE_ZOOM_MIN = "zoom_min"
 JSON_KEY_GROUP_TYPE_ZOOM_MAX = "zoom_max"
 
-# List of client-related JSON keys for area type properties
+# List of client-related JSON keys for area types (the values will be sent to the client on request)
 CLIENT_AREA_TYPE_KEYS = [JSON_KEY_GROUP_TYPE_LABELS, JSON_KEY_GROUP_TYPE_RESOURCE, JSON_KEY_GROUP_TYPE_SEARCH_HIGHLIGHT,
                          JSON_KEY_GROUP_TYPE_SIMPLIFICATION, JSON_KEY_GROUP_TYPE_Z_INDEX, JSON_KEY_GROUP_TYPE_ZOOM_MIN,
                          JSON_KEY_GROUP_TYPE_ZOOM_MAX]
@@ -138,7 +138,12 @@ class HTTPHandler(BaseHTTPRequestHandler):
                                 "id": ', id, ',
                                 "geometry": ', geojson, ',
                                 "properties": {{
-                                    "name": "', name, '",
+                                    "label": "', label, '",
+                                    "label_center": "', label_center, '",
+                                    "start_angle": ', start_angle, ',
+                                    "end_angle": ', end_angle, ',
+                                    "inner_radius": ', inner_radius, ',
+                                    "outer_radius": ', outer_radius, ',
                                     "zoom": ', zoom,
                                 '}}
                             }}'), ','), '
