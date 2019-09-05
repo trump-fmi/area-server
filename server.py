@@ -2,7 +2,6 @@
 import json
 import re
 import gzip
-import copy
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 from database import DatabaseConnection
@@ -134,17 +133,18 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         }},
                         "features": [', string_agg(CONCAT(
                             '{{
-                                "type": "Feature",
-                                "id": ', id, ',
-                                "geometry": ', geojson, ',
-                                "properties": {{
-                                    "label": "', label, '",
-                                    "label_center": "', label_center, '",
-                                    "start_angle": ', start_angle, ',
-                                    "end_angle": ', end_angle, ',
-                                    "inner_radius": ', inner_radius, ',
-                                    "outer_radius": ', outer_radius, ',
-                                    "zoom": ', zoom,
+                                "type":"Feature",
+                                "id":', id, ',
+                                "geometry":', geojson, ',
+                                "properties":{{
+                                    "label":"', label, '",',
+                                    CASE WHEN label_center ISNULL THEN '' ELSE CONCAT('
+                                    "label_center":', label_center, ',
+                                    "start_angle":', start_angle, ',
+                                    "end_angle":', end_angle, ',
+                                    "inner_radius":', inner_radius, ',
+                                    "outer_radius":', outer_radius, ',') END,
+                                    '"zoom":', zoom,
                                 '}}
                             }}'), ','), '
                         ]
