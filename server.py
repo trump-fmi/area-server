@@ -124,11 +124,11 @@ class HTTPHandler(BaseHTTPRequestHandler):
         # Build bounding box query
         query = f"""SELECT CONCAT(
                     '{{
-                        "type": "FeatureCollection",
-                        "crs": {{
-                            "type": "name",
-                            "properties": {{
-                                "name": "EPSG:4326"
+                        "type":"FeatureCollection",
+                        "crs":{{
+                            "type":"name",
+                            "properties":{{
+                                "name":"EPSG:4326"
                             }}
                         }},
                         "features": [', string_agg(CONCAT(
@@ -136,8 +136,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
                                 "type":"Feature",
                                 "id":', id, ',
                                 "geometry":', geojson, ',
-                                "properties":{{
-                                    "label":"', label, '",',
+                                "properties":{{',
+                                    CASE WHEN label ISNULL THEN '' ELSE CONCAT('"label":"', label, '",') END,
                                     CASE WHEN label_center ISNULL THEN '' ELSE CONCAT('
                                     "label_center":', label_center, ',
                                     "start_angle":', start_angle, ',
