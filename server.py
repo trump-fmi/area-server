@@ -24,6 +24,9 @@ DATABASE_PASSWORD = None
 RESOURCE_AREA_TYPES = '/types'
 RESOURCE_PATH_GET = '/get/'
 
+# Coordinate projection of the served GeoJSON data
+DATA_PROJECTION = "EPSG:3857"
+
 # JSON key names of the area types definition
 JSON_KEY_GROUPS_LIST = "groups"
 JSON_KEY_GROUP_NAME = "name"
@@ -128,7 +131,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         "crs":{{
                             "type":"name",
                             "properties":{{
-                                "name":"EPSG:4326"
+                                "name":"{DATA_PROJECTION}"
                             }}
                         }},
                         "features": [', string_agg(CONCAT(
