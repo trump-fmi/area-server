@@ -18,7 +18,7 @@ AREA_TYPES_SCHEMA_FILE = "../area-types/area_types_schema.json"
 DATABASE_HOST = "trump-postgis"
 DATABASE_NAME = "gis"
 DATABASE_USER = "osm"
-DATABASE_PASSWORD = None
+DATABASE_PASSWORD = "nieVooghee9fioSheicaizeiQueeyi2KaCh7boh2lei7xoo9CohtaeTe3mum"
 
 # Resource paths to register the http handlers on
 RESOURCE_AREA_TYPES = '/types'
