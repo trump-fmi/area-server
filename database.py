@@ -14,7 +14,7 @@ class DatabaseConnection:
     def query(self, query):
         self.cursor.execute(query)
 
-    def queryForResult(self, query):
+    def query_for_result(self, query):
         self.cursor.execute(query)
         return self.cursor.fetchall()
 

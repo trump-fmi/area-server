@@ -8,6 +8,8 @@ from database import DatabaseConnection
 from jsonschema import validate
 
 # Port to use
+from timing import TimeMeasure
+
 PORT_NUMBER = 8181
 
 # File paths for area types JSON schema and document files
@@ -75,11 +77,14 @@ class HTTPHandler(BaseHTTPRequestHandler):
     # Handles requests for area types
     def handle_area_types(self):
         # Send success response
-        self.success_reply(area_types_client_json)
+        self.success_reply(area_types_client_json, None)
 
     # Handles requests for areas
     def handle_areas(self):
         global database
+
+        # Init time measure
+        measure = TimeMeasure()
 
         # Extract resource name from path
         search_result = re.search(RESOURCE_PATH_GET + "([A-z0-9_]*)[/?].*", self.path)
@@ -120,6 +125,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
             # Send empty response
             self.empty_headers()
             return
+
+        # Provide measure with meta data about request
+        measure.set_meta_data(x_min, y_min, x_max, y_max, zoom, resource_name)
 
         # Get database table name from area type
         db_table_name = area_type[JSON_KEY_GROUP_TYPE_TABLE_NAME]
@@ -162,10 +170,12 @@ class HTTPHandler(BaseHTTPRequestHandler):
         query = query.replace("\n", "")
         query = re.sub(" {2,}", " ", query)
 
-        # Try to issue the query at the database
+        # Try to issue the query at the database and measure timings
         result = None
         try:
-            result = database.queryForResult(query)
+            measure.query_issued()
+            result = database.query_for_result(query)
+            measure.query_done()
         except:
             # Database connection was lost
             print("Database connection lost, trying to reconnect...")
@@ -173,7 +183,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
             # Try to reconnect
             try:
                 db_connect()
-                result = database.queryForResult(query)
+                measure.query_issued()
+                result = database.query_for_result(query)
+                measure.query_done()
                 print(f"Reconnected successfully")
             except:
                 print(f"Reconnect attempt failed")
@@ -188,9 +200,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
         geo_json = result[0][0]
 
         # Send success response
-        self.success_reply(geo_json)
+        self.success_reply(geo_json, measure)
 
-    def success_reply(self, content_string):
+    def success_reply(self, content_string, measure):
         content_bytes = bytes(content_string, 'UTF-8')
         content_gzip = gzip.compress(content_bytes)
         self.send_response(200)
@@ -201,6 +213,14 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content_gzip)
         self.wfile.flush()
+
+        # Check if measure available
+        if measure is None:
+            return
+
+        # Finish measuring
+        measure.request_answered()
+        measure.write_result()
 
     # Sets headers for empty response
     def empty_headers(self):
