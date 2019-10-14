@@ -44,5 +44,7 @@ class TimeMeasure:
         with open(LOG_FILE, mode='a') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(
-                [self.x_min, self.y_min, self.x_max, self.y_max, self.zoom, self.area_type, self.time_to_query,
-                 self.time_to_data, self.time_to_reply])
+                [self.x_min, self.y_min, self.x_max, self.y_max, self.zoom, self.area_type,
+                 round(self.time_to_query, 4),
+                 round(self.time_to_data, 4),
+                 round(self.time_to_reply, 4)])
