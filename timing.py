@@ -2,8 +2,6 @@ from timeit import default_timer as timer
 import csv
 
 # CSV file to use for storing logs
-# Format:
-#
 LOG_FILE = "timings.csv"
 
 
@@ -44,7 +42,11 @@ class TimeMeasure:
         with open(LOG_FILE, mode='a') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(
-                [self.x_min, self.y_min, self.x_max, self.y_max, self.zoom, self.area_type,
-                 round(self.time_to_query, 4),
-                 round(self.time_to_data, 4),
-                 round(self.time_to_reply, 4)])
+                [round(self.x_min, 8),
+                 round(self.y_min, 8),
+                 round(self.x_max, 8),
+                 round(self.y_max, 8),
+                 self.zoom, self.area_type,
+                 round(self.time_to_query, 3),
+                 round(self.time_to_data, 3),
+                 round(self.time_to_reply, 3)])
