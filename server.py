@@ -172,23 +172,9 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
         # Try to issue the query at the database and measure timings
         result = None
-        try:
-            measure.query_issued()
-            result = database.query_for_result(query)
-            measure.query_done()
-        except:
-            # Database connection was lost
-            print("Database connection lost, trying to reconnect...")
-
-            # Try to reconnect
-            try:
-                db_connect()
-                measure.query_issued()
-                result = database.query_for_result(query)
-                measure.query_done()
-                print(f"Reconnected successfully")
-            except:
-                print(f"Reconnect attempt failed")
+        measure.query_issued()
+        result = database.query_for_result(query)
+        measure.query_done()
 
         # Sanity check for result
         if result is None:
