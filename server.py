@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 import json
 import re
-import gzip
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse, parse_qs
 from database import DatabaseConnection
 from jsonschema import validate
+from aiohttp import web
 
 # Port to use
 from timing import TimeMeasure
@@ -24,7 +22,7 @@ DATABASE_PASSWORD = "nieVooghee9fioSheicaizeiQueeyi2KaCh7boh2lei7xoo9CohtaeTe3mu
 
 # Resource paths to register the http handlers on
 RESOURCE_AREA_TYPES = '/types'
-RESOURCE_PATH_GET = '/get/'
+RESOURCE_PATH_GET = '/get/{type}'
 
 # Coordinate projection of the served GeoJSON data
 DATA_PROJECTION = "EPSG:3857"
@@ -59,174 +57,6 @@ area_types_client_json = ""
 
 # Reference to the database connection to use
 database = None
-
-
-# Class that handles incoming HTTP requests
-class HTTPHandler(BaseHTTPRequestHandler):
-    # Handler for GET requests
-    def do_GET(self):
-        # Handle request depending on the request path
-        if self.path == RESOURCE_AREA_TYPES:
-            self.handle_area_types()
-        elif self.path.startswith(RESOURCE_PATH_GET):
-            self.handle_areas()
-        else:
-            self.invalid_request_headers()
-        return
-
-    # Handles requests for area types
-    def handle_area_types(self):
-        # Send success response
-        self.success_reply(area_types_client_json, None)
-
-    # Handles requests for areas
-    def handle_areas(self):
-        global database
-
-        # Init time measure
-        measure = TimeMeasure()
-
-        # Extract resource name from path
-        search_result = re.search(RESOURCE_PATH_GET + "([A-z0-9_]*)[/?].*", self.path)
-
-        if search_result is None:
-            self.invalid_request_headers()
-            return
-
-        resource_name = search_result.group(1)
-
-        # Get area type for this resource name
-        area_type = area_types_mapping.get(resource_name)
-
-        # Check if area could be found
-        if area_type is None:
-            self.invalid_request_headers()
-            return
-
-        # Get query parameters of the request
-        query_string = urlparse(self.path).query
-        query_parameters = parse_qs(query_string)
-
-        # Raise error if not all required parameters are contained in the request
-        if not all(param in query_parameters for param in ["x_min", "y_min", "x_max", "y_max", "zoom"]):
-            self.invalid_request_headers()
-            return
-
-        # Read request parameters
-        x_min = float(query_parameters.get("x_min")[0])
-        y_min = float(query_parameters.get("y_min")[0])
-        x_max = float(query_parameters.get("x_max")[0])
-        y_max = float(query_parameters.get("y_max")[0])
-        zoom = float(query_parameters.get("zoom")[0])
-        zoom = round(zoom)
-
-        # Check if zoom is within range
-        if (zoom < area_type[JSON_KEY_GROUP_TYPE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_GROUP_TYPE_ZOOM_MAX]):
-            # Send empty response
-            self.empty_headers()
-            return
-
-        # Provide measure with meta data about request
-        measure.set_meta_data(x_min, y_min, x_max, y_max, zoom, resource_name)
-
-        # Get database table name from area type
-        db_table_name = area_type[JSON_KEY_GROUP_TYPE_TABLE_NAME]
-
-        # Build bounding box query
-        query = f"""SELECT CONCAT(
-                    '{{
-                        "type":"FeatureCollection",
-                        "crs":{{
-                            "type":"name",
-                            "properties":{{
-                                "name":"{DATA_PROJECTION}"
-                            }}
-                        }},
-                        "features": [', string_agg(CONCAT(
-                            '{{
-                                "type":"Feature",
-                                "id":', id, ',
-                                "geometry":', geojson, ',
-                                "properties":{{',
-                                    CASE WHEN label ISNULL THEN '' ELSE CONCAT('"label":"', label, '",') END,
-                                    CASE WHEN label_center ISNULL THEN '' ELSE CONCAT('
-                                    "label_center":', label_center, ',
-                                    "start_angle":', start_angle, ',
-                                    "end_angle":', end_angle, ',
-                                    "inner_radius":', inner_radius, ',
-                                    "outer_radius":', outer_radius, ',') END,
-                                    '"zoom":', zoom,
-                                '}}
-                            }}'), ','), '
-                        ]
-                    }}')
-                    FROM (
-                        SELECT * FROM {db_table_name}
-                        WHERE (zoom = {zoom}) AND
-                        (geom && ST_MakeEnvelope({x_min}, {y_min}, {x_max}, {y_max}))
-                    ) AS filter;"""
-
-        # Replace line breaks and multiple spaces from query
-        query = query.replace("\n", "")
-        query = re.sub(" {2,}", " ", query)
-
-        # Try to issue the query at the database and measure timings
-        result = None
-        measure.query_issued()
-        result = database.query_for_result(query)
-        measure.query_done()
-
-        # Sanity check for result
-        if result is None:
-            print("Failed to retrieve data from database")
-            self.internal_error_headers()
-            return
-
-        # Get GeoJSON from result
-        geo_json = result[0][0]
-
-        # Send success response
-        self.success_reply(geo_json, measure)
-
-    def success_reply(self, content_string, measure):
-        content_bytes = bytes(content_string, 'UTF-8')
-        content_gzip = gzip.compress(content_bytes)
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Content-type', 'application/json')
-        self.send_header("Content-length", str(len(content_gzip)))
-        self.send_header("Content-Encoding", "gzip")
-        self.end_headers()
-        self.wfile.write(content_gzip)
-        self.wfile.flush()
-
-        # Check if measure available
-        if measure is None:
-            return
-
-        # Finish measuring
-        measure.request_answered()
-        measure.write_result()
-
-    # Sets headers for empty response
-    def empty_headers(self):
-        self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-
-    # Indicates that the request was malformed
-    def invalid_request_headers(self):
-        self.send_response(400)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(bytes("Invalid request.", "UTF-8"))
-
-    # Indicates that an internal error occurred
-    def internal_error_headers(self):
-        self.send_response(500)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-        self.wfile.write(bytes("An internal error occurred.", "UTF-8"))
 
 
 # Reads the area type definition from the JSON document and validates it against the schema
@@ -297,6 +127,105 @@ def db_connect():
                                   password=DATABASE_PASSWORD)
 
 
+def handle_types(request):
+    return web.json_response(area_types_client_json)
+
+
+def handle_areas(request):
+    global database
+
+    requested_type = request.match_info.get('type', None)
+
+    # Init time measure
+    measure = TimeMeasure()
+
+    if not requested_type:
+        raise web.HTTPBadRequest(text="No area type specified.")
+
+    # Get area type for this resource name
+    area_type = area_types_mapping.get(requested_type)
+
+    # Check if area could be found
+    if area_type is None:
+        raise web.HTTPBadRequest(text=f"Area type '{requested_type}' not available.")
+
+    # Get query parameters of the request
+    query_parameters = request.query
+
+    # Raise error if not all required parameters are contained in the request
+    necessary_parameters = ["x_min", "y_min", "x_max", "y_max", "zoom"]
+    if not all(param in query_parameters for param in necessary_parameters):
+        raise web.HTTPBadRequest(text=f"Query parameters missing. Necessary: {necessary_parameters}")
+
+    # Read request parameters
+    x_min = float(query_parameters["x_min"])
+    y_min = float(query_parameters["y_min"])
+    x_max = float(query_parameters["x_max"])
+    y_max = float(query_parameters["y_max"])
+    zoom = round(float(query_parameters["zoom"]))
+
+    # Check if zoom is within range
+    if (zoom < area_type[JSON_KEY_GROUP_TYPE_ZOOM_MIN]) or (zoom >= area_type[JSON_KEY_GROUP_TYPE_ZOOM_MAX]):
+        raise web.HTTPNoContent()
+
+    # Provide measure with meta data about request
+    measure.set_meta_data(x_min, y_min, x_max, y_max, zoom, requested_type)
+
+    # Get database table name from area type
+    db_table_name = area_type[JSON_KEY_GROUP_TYPE_TABLE_NAME]
+
+    # Build bounding box query
+    query = f"""SELECT CONCAT(
+                        '{{
+                            "type":"FeatureCollection",
+                            "crs":{{
+                                "type":"name",
+                                "properties":{{
+                                    "name":"{DATA_PROJECTION}"
+                                }}
+                            }},
+                            "features": [', string_agg(CONCAT(
+                                '{{
+                                    "type":"Feature",
+                                    "id":', id, ',
+                                    "geometry":', geojson, ',
+                                    "properties":{{',
+                                        CASE WHEN label ISNULL THEN '' ELSE CONCAT('"label":"', label, '",') END,
+                                        CASE WHEN label_center ISNULL THEN '' ELSE CONCAT('
+                                        "label_center":', label_center, ',
+                                        "start_angle":', start_angle, ',
+                                        "end_angle":', end_angle, ',
+                                        "inner_radius":', inner_radius, ',
+                                        "outer_radius":', outer_radius, ',') END,
+                                        '"zoom":', zoom,
+                                    '}}
+                                }}'), ','), '
+                            ]
+                        }}')
+                        FROM {db_table_name}
+                            WHERE (zoom = {zoom}) AND
+                            (geom && ST_MakeEnvelope({x_min}, {y_min}, {x_max}, {y_max}));"""
+
+    # Replace line breaks and multiple spaces from query
+    query = query.replace("\n", "")
+    query = re.sub(" {2,}", " ", query)
+
+    # Try to issue the query at the database and measure timings
+    measure.query_issued()
+    result = database.query_for_result(query)
+    measure.query_done()
+
+    # Sanity check for result
+    if result is None:
+        raise web.HTTPInternalServerError(text="Failed to retrieve data from database")
+
+    # Get GeoJSON from result
+    geo_json = result[0][0]
+
+    # Send success response
+    return web.json_response(geo_json)
+
+
 # Main function
 def main():
     global database
@@ -311,22 +240,17 @@ def main():
     print(f"Connecting to database \"{DATABASE_NAME}\" at \"{DATABASE_HOST}\" as user \"{DATABASE_USER}\"...")
     db_connect()
 
-    print("Successfully connected")
-    print(f"Starting server on port {PORT_NUMBER}...")
+    print(f"Successfully connected. Starting server on port {PORT_NUMBER}...")
 
-    # Initialize server
-    server = None
+    app = web.Application()
+    app.add_routes([web.get('/', handle_types),
+                    web.get(RESOURCE_AREA_TYPES, handle_types),
+                    web.get(RESOURCE_PATH_GET, handle_areas)])
+
     try:
-        # Create basic web server
-        server = HTTPServer(('', PORT_NUMBER), HTTPHandler)
-        print("Server started")
-
-        # Wait for incoming requests
-        server.serve_forever()
-
+        web.run_app(app, port=PORT_NUMBER)
     except KeyboardInterrupt:
         print('Interrupt: Shutting down server')
-        if server is not None: server.socket.close()
         if database is not None: database.disconnect()
 
 
