@@ -222,8 +222,13 @@ def handle_areas(request):
     # Get GeoJSON from result
     geo_json = result[0][0]
 
-    # Send success response
-    return web.json_response(geo_json)
+    try:
+        # Send success response
+        return web.json_response(geo_json)
+    finally:
+        # Finish measuring
+        measure.request_answered()
+        measure.write_result()
 
 
 # Main function
