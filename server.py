@@ -53,8 +53,8 @@ area_type_groups = {}
 # Maps resource names to the corresponding area types
 area_types_mapping = {}
 
-# Will hold the JSON string containing client-related data about the area types
-area_types_client_json = ""
+# Will hold the client-related data about the area types
+area_types_client_list = []
 
 # Reference to the database connection to use
 database = None
@@ -83,10 +83,10 @@ def read_area_types():
 
 
 def parse_area_types():
-    global area_type_groups, area_types_mapping, area_types_client_json
+    global area_type_groups, area_types_mapping, area_types_client_list
 
     # List holding the filtered client-related data
-    client_data = []
+    area_types_client_list = []
 
     # Iterate over all defined area type groups
     for area_type_group in area_type_groups:
@@ -96,7 +96,7 @@ def parse_area_types():
         filtered_group[JSON_KEY_GROUP_NAME] = area_type_group[JSON_KEY_GROUP_NAME]
         filtered_group[JSON_KEY_GROUP_TYPES] = []
 
-        client_data.append(filtered_group)
+        area_types_client_list.append(filtered_group)
 
         # Iterate over all area types of this group
         for area_type in area_type_group[JSON_KEY_GROUP_TYPES]:
@@ -118,9 +118,6 @@ def parse_area_types():
                 # Key is client-related, add it to filtered area type dict
                 filtered_type[type_key] = area_type[type_key]
 
-    # Dump client-related data to JSON string
-    area_types_client_json = json.dumps(client_data, separators=(',', ':'))
-
 
 def db_connect():
     global database
@@ -129,7 +126,7 @@ def db_connect():
 
 
 def handle_types(request):
-    return web.json_response(area_types_client_json)
+    return web.json_response(area_types_client_list)
 
 
 def handle_areas(request):
@@ -229,7 +226,8 @@ def handle_areas(request):
 
     try:
         # Send success response
-        return web.json_response(geo_json)
+        return web.Response(text=geo_json, content_type="application/json")
+
     finally:
         # Finish measuring
         measure.request_answered()
