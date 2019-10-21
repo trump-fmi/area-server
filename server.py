@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import logging
 import re
 from database import DatabaseConnection
 from jsonschema import validate
@@ -140,6 +141,7 @@ def handle_areas(request):
     measure = TimeMeasure()
 
     if not requested_type:
+        print("Bad Request: No area type specified")
         raise web.HTTPBadRequest(text="No area type specified.")
 
     # Get area type for this resource name
@@ -147,6 +149,7 @@ def handle_areas(request):
 
     # Check if area could be found
     if area_type is None:
+        print(f"Bad Request: Area type '{requested_type}' not available.")
         raise web.HTTPBadRequest(text=f"Area type '{requested_type}' not available.")
 
     # Get query parameters of the request
@@ -155,6 +158,7 @@ def handle_areas(request):
     # Raise error if not all required parameters are contained in the request
     necessary_parameters = ["x_min", "y_min", "x_max", "y_max", "zoom"]
     if not all(param in query_parameters for param in necessary_parameters):
+        print(f"Bad Request: Query parameters missing. Necessary: {necessary_parameters}")
         raise web.HTTPBadRequest(text=f"Query parameters missing. Necessary: {necessary_parameters}")
 
     # Read request parameters
@@ -217,6 +221,7 @@ def handle_areas(request):
 
     # Sanity check for result
     if result is None:
+        print("Internal Server Error: Failed to retrieve data from database")
         raise web.HTTPInternalServerError(text="Failed to retrieve data from database")
 
     # Get GeoJSON from result
@@ -248,15 +253,12 @@ def main():
     print(f"Successfully connected. Starting server on port {PORT_NUMBER}...")
 
     app = web.Application()
+    logging.basicConfig(level=logging.DEBUG)
     app.add_routes([web.get('/', handle_types),
                     web.get(RESOURCE_AREA_TYPES, handle_types),
                     web.get(RESOURCE_PATH_GET, handle_areas)])
 
-    try:
-        web.run_app(app, port=PORT_NUMBER)
-    except KeyboardInterrupt:
-        print('Interrupt: Shutting down server')
-        if database is not None: database.disconnect()
+    web.run_app(app, port=PORT_NUMBER)
 
 
 if __name__ == '__main__':
