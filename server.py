@@ -59,6 +59,8 @@ area_types_client_list = []
 # Reference to the database connection to use
 database = None
 
+# Headers added to every response
+HEADERS = {"Access-Control-Allow-Origin": "*"}
 
 # Reads the area type definition from the JSON document and validates it against the schema
 def read_area_types():
@@ -126,7 +128,7 @@ def db_connect():
 
 
 def handle_types(request):
-    return web.json_response(area_types_client_list)
+    return web.json_response(area_types_client_list, headers=HEADERS)
 
 
 def handle_areas(request):
@@ -226,7 +228,7 @@ def handle_areas(request):
 
     try:
         # Send success response
-        return web.Response(text=geo_json, content_type="application/json")
+        return web.Response(text=geo_json, content_type="application/json", headers=HEADERS)
 
     finally:
         # Finish measuring
