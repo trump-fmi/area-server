@@ -141,7 +141,7 @@ def handle_areas(request):
 
     if not requested_type:
         print("Bad Request: No area type specified")
-        raise web.HTTPBadRequest(text="No area type specified.")
+        raise web.HTTPBadRequest(text="No area type specified.", headers=HEADERS)
 
     # Get area type for this resource name
     area_type = area_types_mapping.get(requested_type)
@@ -149,7 +149,7 @@ def handle_areas(request):
     # Check if area could be found
     if area_type is None:
         print(f"Bad Request: Area type '{requested_type}' not available.")
-        raise web.HTTPBadRequest(text=f"Area type '{requested_type}' not available.")
+        raise web.HTTPBadRequest(text=f"Area type '{requested_type}' not available.", headers=HEADERS)
 
     # Get query parameters of the request
     query_parameters = request.query
@@ -158,7 +158,7 @@ def handle_areas(request):
     necessary_parameters = ["x_min", "y_min", "x_max", "y_max", "zoom"]
     if not all(param in query_parameters for param in necessary_parameters):
         print(f"Bad Request: Query parameters missing. Necessary: {necessary_parameters}")
-        raise web.HTTPBadRequest(text=f"Query parameters missing. Necessary: {necessary_parameters}")
+        raise web.HTTPBadRequest(text=f"Query parameters missing. Necessary: {necessary_parameters}", headers=HEADERS)
 
     # Read request parameters
     x_min = float(query_parameters["x_min"])
